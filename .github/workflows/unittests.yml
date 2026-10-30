@@ -1,0 +1,44 @@
+name: Unit Tests
+
+on:
+  push:
+    branches:
+      - master
+      - 'push-*'
+  pull_request:
+    branches:
+      - master
+      - 'push-*'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  unittests:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # 8.2 is the minimum supported version (composer.json); the tests load
+        # every src/ file, so 8.3-only syntax or functions fail here.
+        version: [8.2, 8.3, 8.4, 8.5]
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v6
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.version }}
+          extensions: mbstring, curl
+          tools: composer
+
+      - name: Install dependencies
+        run: composer install --no-interaction --no-progress
+
+      - name: Run unit tests
+        run: php tests/run.php

@@ -1,0 +1,59 @@
+---
+sidebar_position: 7
+---
+
+# SMS Token Expansion
+
+When a message contains `%…%` tokens, `TokenExpandingSmsProvider` intercepts the send and expands them per recipient. When the entry carries `logicalRecipients` (recipients sharing a mobile, clustered by `DeduplicatingSmsProvider`), it expands **per group** instead: each member's token values are joined with " & " ("Hi Alice & Bob, …"), so the one message sent to the shared handset reads naturally.
+
+## Available Tokens
+
+`getAvailableTokens()` in `include/jethro_sms.php` defines the token set:
+`%firstname%`, `%lastname%`, `%fullname%` — resolved from
+`_person.first_name` / `last_name`.
+
+## How It Works
+
+### Without Tokens (fast path)
+
+If the message contains no `%` characters, the message is passed through directly to the inner provider as a single batch. **Zero overhead.**
+
+### With Tokens (per-recipient path)
+
+If `%` is detected:
+
+1. Each recipient is individually sent through the inner provider
+2. The token resolver closure is called for each recipient
+3. Person data is fetched from the database (cached per request via closure)
+4. Tokens are replaced with actual values via `preg_replace_callback('/%\w+%/', ...)`
+5. Each personalised message is sent individually to the gateway
+6. Each `SmsDelivery` object carries the expanded message body
+
+### Pre-flight validation
+
+`DbLoggingSmsProvider::send()` checks: if the message contains `%` tokens, every recipient MUST be a `JethroSmsRecipient` (not a bare `PhoneNumber`). This fails fast before any API calls — preventing literal `%firstname%` from reaching recipients due to a caller passing raw phone numbers.
+
+### Why per-recipient sends?
+
+Alternatives considered:
+
+- **Gateway-side templates** — not universally supported, and limits tokens to whatever the gateway offers
+- **Client-side expansion** — would expose person data in the browser before sending
+- **Batch pre-expansion** — would still require one API call per distinct message, with none of the gateway-independence
+
+Per-recipient expansion from the server works with any gateway, keeps person data server-side, and the `%` fast-path check means zero overhead for non-personalised messages.
+
+## Caching
+
+The token resolver uses a closure-bound cache — each person's data is fetched once per request, even if the same person appears in multiple sends.
+
+## Error Handling
+
+Non-`JethroSmsRecipient` recipients (bare phone numbers from the CLI, where `$logToDb` is false) will throw a `RuntimeException` from the token resolver if `%` tokens are present. This is caught by `DbLoggingSmsProvider::send()` which returns `\Result::failure()` before any API calls.
+
+## UI Hint
+
+The UI shows a hint below the textarea:
+> Personalise with: `%firstname%`, `%lastname%`, `%fullname%`
+
+Rendered by `printTextbox()` using `getAvailableTokens()`.

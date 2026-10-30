@@ -1,0 +1,76 @@
+---
+sidebar_position: 8
+---
+
+# SMS Character Counting
+
+The character counter and preview are **server-rendered** by
+`Sms\renderStatusline()` in `jethro-sms/src/sms_statusline.php` and streamed to
+the browser via Datastar SSE (`?call=sms_statusline`). See
+*SMS Datastar / HATEOAS statusline* in Jethro's developer docs (`docs/docs/developer/sms/SMS_DATASTAR.md`). The segment/cost maths
+below is the spec for that PHP port (unit-tested in `jethro-sms/tests/statusline/`).
+Only the instant `text.length` character count remains client-side (a Datastar
+`data-text` signal).
+
+## GSM 03.38 Alphabet
+
+Standard SMS uses the GSM 03.38 7-bit alphabet. Most Latin characters, numbers, and common punctuation are single characters.
+
+### GSM Segment Sizes
+
+| Type | Single message | Concatenated |
+|---|---|---|
+| GSM 7-bit | 160 chars | 153 chars per segment |
+
+## Extended GSM Characters
+
+Some characters count as **two** GSM characters: `^`, `{`, `}`, `[`, `]`, `~`, `|`, `€`.
+
+## UCS-2 (Unicode)
+
+When the message contains any non-GSM character, the entire message switches to UCS-2 (UTF-16) encoding:
+
+| Type | Single message | Concatenated |
+|---|---|---|
+| UCS-2 | 70 chars | 67 chars per segment |
+
+## Unicode Modes
+
+Controlled by `SMS_UNICODE_PERMITTED` (default: `'when_free'`):
+
+| Value | Behavior |
+|---|---|
+| `'when_free'` (default) | Allowed for single-segment messages (≤70 chars), blocked for longer |
+| `'0'` (disabled) | Non-GSM chars block the Send button entirely |
+| `'1'` (enabled) | Everything allowed; warning shown if removing special chars would save segments |
+
+## Cost Calculation
+
+If `SMS_SEGMENT_COST` is configured, the counter multiplies segments × cost and displays the estimated total.
+
+## Display
+
+The `#sms-statusline` element shows (composed in this order, parts skipped when not applicable):
+
+- Max-length warning (from raw text)
+- Cost / segment line (from preview when available, raw-text estimate otherwise)
+- — or, when over budget — balance warning that replaces the cost line
+- Unicode cost-doubling warning (from raw text)
+- Test-mode notice
+
+Special case: when the message is unicode-blocked by `SMS_UNICODE_PERMITTED` policy, only the block warning is shown.
+
+## Architecture
+
+The maths (`gsmLength`, `gsmSegmentCount`, `ucs2SegmentCount`, `getNonGsmChars`,
+`shortenUrlsInText`) and the two HTML renderers (`renderStatusline`,
+`renderPreviewPanel`) live in `jethro-sms/src/sms_statusline.php` as pure, unit-tested
+functions. `Call_SMS_Statusline` runs them with a `SmsStatuslineConfig` snapshot
+and streams the result. The client posts the form on debounced input and morphs
+the returned `#sms-statusline*` / `#sms-preview-panel*` elements by id. There is
+one source of truth (the server), eliminating the old two-writer race entirely.
+See *SMS Datastar / HATEOAS statusline* in Jethro's developer docs (`docs/docs/developer/sms/SMS_DATASTAR.md`).
+
+## See Also
+
+- [Configuration](./configuration)

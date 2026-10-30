@@ -1,0 +1,44 @@
+---
+sidebar_position: 6
+---
+
+# SMS Status Codes
+
+Defined in `\Sms\SmsStatus` — `jethro-sms/src/SmsStatus.php` (string-backed enum).
+See the enum definition for the full list of cases, `isOk()`, `isFinal()`,
+`nonFinalValues()`, `fromMySql()`/`toMySql()`, `filterOptions()`, and
+`ACCEPTED_STATUSES`.
+
+## Behavioral notes
+
+**v5 scheduled remapping**: The v5 API returns status code 1527 for scheduled
+messages. Both `FiveCentSmsDelivery` and `parseDeliveryInfo()` map 1527 →
+`SCHEDULED`. Conversely, `DELIVERY_IN_PROGRESS` with status text "Test Message"
+is remapped to `TEST_MESSAGE`.
+
+**`isFinal()`** returns true only for `DELIVERED`, `FAILED`, `CANCELLED`, and
+`TEST_MESSAGE`. All others (`QUEUED`, `SENT`, `SCHEDULED`, `SENDING`,
+`DELIVERY_IN_PROGRESS`, `UNKNOWN`) are non-final — the delivery may still
+transition and should be re-polled.
+
+**`isOk()`** returns true for all statuses except `FAILED`, `CANCELLED`, and
+`UNKNOWN`.
+
+**Blocked destinations** have no status of their own. When a provider reports a
+destination as blocked, rejected or expired (Cellcast does this in its report),
+it is stored as `FAILED`, so nothing is left in a non-final state waiting for a
+delivery that will never happen. A provider refusal of the *send* is a different
+failure: the recipients involved are marked `FAILED` at send time.
+
+## Database Storage
+
+The `smsdelivery.status` column is a MySQL ENUM mirroring the string values:
+
+```sql
+ENUM('queued','sent','delivered','failed','in-progress','scheduled','cancelled','sending','test-message','unknown')
+```
+
+## See Also
+
+- *Delivery Tracking* in Jethro's developer docs (`docs/docs/developer/sms/delivery-tracking.mdx`)
+- *Database Tables* in Jethro's developer docs (`docs/docs/developer/sms/database.mdx`)

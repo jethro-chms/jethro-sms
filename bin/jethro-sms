@@ -1,0 +1,63 @@
+#!/usr/bin/env php
+<?php
+
+/**
+ * jethro-sms — standalone CLI for the jethro-sms engine.
+ *
+ * Configuration comes from SMS_* PHP constants, supplied either by a
+ * --config=<file> PHP file (define()s) or by SMS_ / 2FA_ prefixed
+ * environment variables. Recipients must be phone numbers (person-ID recipients and
+ * database logging require the Jethro wrapper, scripts/sms.php).
+ *
+ * The standalone provider chain is OverridingSmsProvider (sender allowlist,
+ * no cooloff) around the raw provider. There is no token expansion —
+ * %tokens% require per-recipient person data, which only a host application
+ * can supply.
+ */
+
+// --- config: --config=<file> (strip before dispatch) --------------------
+$argv = $_SERVER['argv'];
+foreach ($argv as $i => $arg) {
+	if ($i > 0 && str_starts_with($arg, '--config=')) {
+		$file = substr($arg, strlen('--config='));
+		if (!is_readable($file)) {
+			fwrite(STDERR, "Error: config file not readable: $file\n");
+			exit(1);
+		}
+		require $file;
+		array_splice($argv, $i, 1);
+		break;
+	}
+}
+
+// --- config: SMS_* / 2FA_* environment variables -------------------------
+foreach (array_merge($_ENV, $_SERVER) as $name => $value) {
+	if (\is_string($value) && (str_starts_with($name, 'SMS_') || str_starts_with($name, '2FA_')) && !defined($name)) {
+		define($name, $value);
+	}
+}
+
+// \Result (jethro/jethro-utils). Run through vendor/bin,
+// Composer passes its autoloader's path; run from a checkout, it is ours.
+require_once $_composer_autoload_path ?? __DIR__ . '/../vendor/autoload.php';
+require_once __DIR__ . '/../src/load.php';
+
+$env = new \Sms\Cli\CliEnvironment(
+	providerFactory: function (bool $logToDb): \Result {
+		// $logToDb is meaningless standalone — there is no DB.
+		$classResult = \Sms\resolveRawProviderClass();
+		if ($classResult->isFailure()) {
+			return $classResult;
+		}
+		$class = $classResult->getValue();
+		try {
+			$provider = $class::fromSettings(new \Sms\ConstantSettings(), false);
+		} catch (\Throwable $e) {
+			return \Result::failure($e->getMessage());
+		}
+		return \Result::success(new \Sms\OverridingSmsProvider($provider, userInitiated: false));
+	},
+	usageProgram: 'jethro-sms',
+);
+
+\Sms\Cli\main($argv, $env);

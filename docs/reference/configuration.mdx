@@ -1,0 +1,68 @@
+---
+sidebar_position: 3
+---
+
+# SMS Configuration Reference
+
+All SMS settings are PHP constants in `conf.php`. Each provider reads its own
+
+## Design Intent
+
+Providers read configuration from an injected `SmsSettings` via their
+`fromSettings()` static factories; `ConstantSettings` (global `SMS_*` constants)
+is the default. `fromSettings()` is the canonical wiring point where each provider
+declares its required and optional configuration. The bridge layer
+(`include/jethro_sms.php`) does **not** pre-read every setting — it passes a
+settings source and the provider looks up what it needs.
+
+**Exception**: provider **URL** constants (`SMS_CELLCAST_URL`, `SMS_5CENTSMS_URL`, etc.)
+may be set to bare paths (starting with `/`) in test configs. `fromSettings()`
+accepts a `$baseUrl` parameter (`BASE_URL_ABSOLUTE`, defined alongside `BASE_URL` in
+`include/init.php`) and prepends it to resolve bare-path URLs.  Production
+configs use absolute URLs, so the resolution is a no-op.
+
+| Provider | Source |
+|---|---|
+| FiveCentSMS v5 | `jethro-sms/src/Providers/FiveCentSmsV5Provider.php` (class docblock) |
+| MobileMessage | `jethro-sms/src/Providers/MobileMessageSmsProvider.php` (class docblock) |
+| Cellcast | `jethro-sms/src/Providers/CellcastSmsProvider.php` (class docblock) |
+| Template / v4 | `jethro-sms/src/Providers/TemplateSmsProvider.php` |
+
+## Provider Selection
+
+`SMS_PROVIDER` — FQN, short key (`'5centsmsv5'`, `'cellcast'`,
+`'mobilemessage'`), or `'auto'`. When unset or `'auto'`, auto-detection
+iterates providers by `usagePreference()` descending. See
+[Provider auto-detection](./providers#auto-detection).
+
+## 2FA sends
+
+Two-factor authentication sends through the same configured gateway as
+ordinary sends; there are no separate 2FA credentials. The sender is
+`2FA_SENDER_ID`, falling back to a literal `SMS_SENDER` (never
+`_USER_MOBILE_`, which cannot be resolved before login).
+
+## Cross-cutting constants
+
+These are read by the bridge layer, not individual providers. See
+`include/jethro_sms.php` and `Sms\OverridingSmsProvider` for usage.
+
+- `SMS_SENDER` — hardcoded sender, overrides dropdown. Supports `_USER_MOBILE_`.
+- `SMS_SENDER_OPTIONS` — comma-separated selectable sender IDs. Tokens: `_USER_MOBILE_`, `_SENDER_IDS_`. Was `SMS_SENDERIDS`.
+- `SMS_SENDER_DEFAULT` — default selection (blank = first option).
+- `SMS_SEND_COOLOFF` — undo-window delay for immediate sends (default 30s). Set 0 to disable.
+- `SMS_MAX_LENGTH` — character limit (default 160).
+- `SMS_SEGMENT_COST` — per-segment cost override. Falls back to provider hardcoded value.
+- `SMS_UNICODE_PERMITTED` — `'0'` / `'when_free'` (default) / `'1'`.
+- `SMS_SAVE_TO_NOTE_SUBJECT` — default note subject.
+- `SMS_SAVE_TO_NOTE_BY_DEFAULT` — pre-check "Save as Note".
+- `SMS_TESTMODE` — dry-run without delivering.
+- `SMS_VERBOSE` — log HTTP to error_log.
+
+Also see the [SMS Administration page](../../../administration/config/sms.mdx) for the
+user-facing reference.
+
+## See Also
+
+- [SMS Providers](./providers)
+- [User Manual: SMS](../../../user-manual/sms)

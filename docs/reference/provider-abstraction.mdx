@@ -1,0 +1,86 @@
+---
+sidebar_position: 15
+---
+
+# Provider Abstraction
+
+The `SmsProvider` interface (`jethro-sms/src/SmsProvider.php`) is the key
+abstraction that makes the SMS system flexible and testable.
+
+## The Interface
+
+Every send is a batch — one call carries every `(message, recipients)`
+entry for the whole send action:
+
+```php
+interface SmsProvider {
+    public static function fromSettings(SmsSettings $settings, ?string $baseUrl = null): static;
+    public function getKey(): ?string;   // upstream API + version, e.g. 'cellcastv1'; null if unknown
+    public static function getConstants(): array;
+    public static function usagePreference(): int;
+
+    /** @param array<int, array{message: string, recipients: SmsRecipient[]}> $entries
+     *  @return \Result<SmsDeliveryBatch, string> */
+    public function send(array $entries, SmsSender $sender, ?int $sendAt = null, bool $preview = false): \Result;
+
+    /** @return \Result<SenderID[], string> */
+    public function getSenderIds(bool $getAll = false): \Result;
+    /** @return \Result<int, string> */
+    public function getBalance(): \Result;
+    /** @return \Result<SmsDelivery, string> */
+    public function updateDelivery(SmsDelivery $delivery): \Result;
+    public function hasCapability(SmsCapability $cap): bool;
+}
+```
+
+See [SMS Providers](./providers) for the full method list and
+per-provider capability table.
+
+## Why an Interface?
+
+- **Gateway independence** — swap between FiveCentSMS, Cellcast, MobileMessage, or a custom provider without changing calling code
+- **Testability** — mock the provider in tests, or swap in a `FakeHttpClient` beneath a real provider
+- **Capability discovery** — `hasCapability(SmsCapability)` lets callers check what's supported before attempting an operation, rather than calling and catching a failure
+
+## The Decorator Chain
+
+The actual provider used at runtime is a chain of decorators, outermost
+first (see *Provider chain* in Jethro's developer docs (`docs/docs/developer/sms/smsarchitecture.md`)
+for the full rationale):
+
+```
+OverridingSmsProvider      ← sender validation + send cooloff
+  → DbLoggingSmsProvider   ← database persistence
+    → DeduplicatingSmsProvider   ← one message per shared number
+      → TokenExpandingSmsProvider  ← per-recipient/per-group token expansion
+        → [Concrete Provider]      ← talks to the gateway
+```
+
+Each decorator implements `SmsProvider` and delegates to the inner provider
+after adding its own behavior — each layer adds exactly one responsibility.
+
+## Adding a New Provider
+
+1. Implement `SmsProvider` in the `Sms\Providers\` namespace
+2. Implement `fromSettings()` to read credentials from the injected `SmsSettings` (`ConstantSettings`, i.e. `SMS_*` constants, is the default)
+3. Register the class in `providerCandidates()` (`jethro-sms/src/factory.php`) so auto-detection can find it
+4. Set `SMS_PROVIDER` to the new provider's short key, or rely on auto-detection once its required constants are defined
+
+The rest of the system — UI, CLI, database logging, token expansion — works unchanged.
+
+A host application can also supply a provider class of its own, outside this package: it passes `[key => class]` to `resolveRawProviderClass($hostProviders)`, and `SMS_PROVIDER` may then name that key. Host providers are never auto-detected, and built-in keys win on a collision.
+
+## Test Mode
+
+`FakeHttpClient` (abstract, `jethro-sms/src/FakeHttpClient.php`) replaces
+the real HTTP client when `SMS_TESTMODE` is on, so the full stack
+(validation, token expansion, database logging) can be tested without
+contacting a real gateway. Fidelity varies by provider — e.g.
+`CellcastFakeHttpClient` returns realistic JSON for every endpoint, while
+older fakes return a bare `'OK'`. See [SMS Providers](./providers) for
+per-provider test mode notes.
+
+## See Also
+
+- *SMS Architecture* in Jethro's developer docs (`docs/docs/developer/sms/smsarchitecture.md`)
+- *Design Decisions* in Jethro's developer docs (`docs/docs/developer/sms/design-decisions.mdx`)

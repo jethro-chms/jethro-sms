@@ -1,0 +1,24 @@
+{
+    "name": "jethro/jethro-sms",
+    "description": "Provider-agnostic SMS engine and CLI: MobileMessage, 5CentSMS v5, Cellcast; token expansion, segment/cost maths, opaque sender-registration state machines.",
+    "type": "library",
+    "license": "Apache-2.0",
+    "repositories": [
+        {
+            "type": "vcs",
+            "url": "https://github.com/jethro-chms/jethro-utils"
+        }
+    ],
+    "require": {
+        "php": ">=8.2",
+        "ext-mbstring": "*",
+        "jethro/jethro-utils": "^1.0"
+    },
+    "autoload": {
+        "files": ["src/load.php"]
+    },
+    "bin": ["bin/jethro-sms"],
+    "scripts": {
+        "test": "php tests/run.php"
+    }
+}
