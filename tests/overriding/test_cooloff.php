@@ -15,7 +15,8 @@
  *   (guarded by if(!defined)) so filtered and full runs both work.
  *   This file MUST NOT define SMS_SENDER, SMS_SEND_COOLOFF, or
  *   SMS_SEGMENT_COST — other tests depend on those being undefined (e.g. the
- *   cooloff default is 30 when SMS_SEND_COOLOFF is undefined).
+ *   cooloff default is 0, off, when SMS_SEND_COOLOFF is undefined; a configured
+ *   value is tested in test_cooloff_configured_isolated.php).
  *
  * @see \Sms\OverridingSmsProvider — the cool-off is applied only when the inner provider can defer and cancel
  */
@@ -117,27 +118,22 @@ function makeCooloffProvider(array $capabilities): array
 // Tests
 // ---------------------------------------------------------------------------
 
-test('cooloff: inner WITH both DEFERRED_SEND and DEFERRED_SEND_CANCEL → sendAt ≈ time()+30', function () {
+test('cooloff: default (SMS_SEND_COOLOFF undefined) → sendAt stays null, even with both capabilities', function () {
     [$provider, $spy] = makeCooloffProvider([
         SmsCapability::DEFERRED_SEND,
         SmsCapability::DEFERRED_SEND_CANCEL,
     ]);
 
-    $before = time();
     $result = $provider->send(
         [['message' => 'hello', 'recipients' => [new PhoneNumber(COOLOFF_RECIPIENT)]]],
         new SenderID(COOLOFF_SENDER),
     );
-    $after = time();
 
     assert_true($result->isSuccess(), 'send() must succeed: ' . var_export($result->getError(), true));
-    assert_true(
-        $spy->lastSendAt !== null,
-        'sendAt must be set when inner has both DEFERRED_SEND and DEFERRED_SEND_CANCEL',
-    );
-    assert_true(
-        $spy->lastSendAt >= $before + 28 && $spy->lastSendAt <= $after + 32,
-        'sendAt must be approximately time()+30, got ' . $spy->lastSendAt . ' (expected ' . ($before + 30) . '±2)',
+    assert_eq(
+        $spy->lastSendAt,
+        null,
+        'without SMS_SEND_COOLOFF the send must go out immediately: a hold on every web send is not the default',
     );
 });
 

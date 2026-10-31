@@ -50,7 +50,7 @@ These are read by the bridge layer, not individual providers. See
 - `SMS_SENDER` — hardcoded sender, overrides dropdown. Supports `_USER_MOBILE_`.
 - `SMS_SENDER_OPTIONS` — comma-separated selectable sender IDs. Tokens: `_USER_MOBILE_`, `_SENDER_IDS_`. Was `SMS_SENDERIDS`.
 - `SMS_SENDER_DEFAULT` — default selection (blank = first option).
-- `SMS_SEND_COOLOFF` — undo-window delay for immediate sends (default 30s). Set 0 to disable.
+- `SMS_SEND_COOLOFF` — undo-window delay for immediate sends. Default 0 (off): messages send immediately. Only providers that can schedule *and* cancel hold messages; 5CentSMS v5 and Cellcast use the value as set, MobileMessage needs at least 90 s (its API sends anything 60 s or less ahead immediately).
 - `SMS_MAX_LENGTH` — character limit (default 160).
 - `SMS_SEGMENT_COST` — per-segment cost override. Falls back to provider hardcoded value.
 - `SMS_UNICODE_PERMITTED` — `'0'` / `'when_free'` (default) / `'1'`.

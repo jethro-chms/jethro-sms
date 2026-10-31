@@ -9,7 +9,8 @@ namespace Sms;
  *
  *   - send(): for user-initiated sends, validates the sender matches
  *     SMS_SENDER if set, otherwise checks the SMS_SENDER_OPTIONS allowlist;
- *     applies SMS_SEND_COOLOFF delay to immediate sends.  System-initiated
+ *     applies SMS_SEND_COOLOFF delay (default 0: off) to immediate sends.
+ *     System-initiated
  *     sends (2FA, reminders, CLI) take their sender from config and skip
  *     all three.  The `_USER_MOBILE_` token (in either constant) matches
  *     only the $userMobile injected at construction.
@@ -84,9 +85,11 @@ class OverridingSmsProvider extends DecoratingSmsProvider
 		// only when user-initiated and the provider supports both deferred
 		// send and cancellation — the cooloff is an undo window; without
 		// cancel it's just added latency.  System-initiated sends (2FA,
-		// reminders) skip the delay.
+		// reminders) skip the delay.  Default 0 (off): holding every web send
+		// is surprising latency, and providers differ in the shortest schedule
+		// they accept (MobileMessage: >60 s, so at least 90 s).
 		if ($sendAt === null && $this->userInitiated) {
-			$cooloff = (int) $settings['SMS_SEND_COOLOFF']->val(30);
+			$cooloff = (int) $settings['SMS_SEND_COOLOFF']->val(0);
 			if ($cooloff > 0
 				&& $this->inner->hasCapability(SmsCapability::DEFERRED_SEND)
 				&& $this->inner->hasCapability(SmsCapability::DEFERRED_SEND_CANCEL)) {
