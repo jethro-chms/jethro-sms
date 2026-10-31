@@ -87,7 +87,7 @@ function makeChain(array $tokensByPerson): array
 {
 	$inner = new RecordingInner();
 	$resolver = fn(SmsRecipient $r) => $tokensByPerson[$r->personId] ?? [];
-	return [new TokenExpandingSmsProvider($inner, $resolver, new Templater(), ['firstname', 'lastname']), $inner];
+	return [new TokenExpandingSmsProvider($inner, $resolver, new Templater(), ['firstname', 'lastname', 'selected.firstname']), $inner];
 }
 
 test('Group expansion: one message per group with member values joined " & "', function () {
@@ -126,6 +126,27 @@ test('Group expansion: members missing a token value contribute nothing to the j
 	);
 
 	assert_eq($inner->sentEntries[0]['message'], 'Hi Alice');
+});
+
+test('Group expansion: a value shared by several members appears once', function () {
+	// Two parents sharing a mobile, both sent a message about the same children.
+	$mum = new FakePerson(1, new PhoneNumber('0400111222'));
+	$dad = new FakePerson(2, new PhoneNumber('0400111222'));
+	[$chain, $inner] = makeChain([
+		1 => ['firstname' => 'Carol', 'selected.firstname' => 'Ann & Ben'],
+		2 => ['firstname' => 'Dave', 'selected.firstname' => 'Ann & Ben'],
+	]);
+
+	$chain->send(
+		[[
+			'message' => 'Hi %firstname%, %selected.firstname% has camp Friday',
+			'recipients' => [$mum],
+			'logicalRecipients' => [[$mum, $dad]],
+		]],
+		new PhoneNumber('0400000000'),
+	);
+
+	assert_eq($inner->sentEntries[0]['message'], 'Hi Carol & Dave, Ann & Ben has camp Friday');
 });
 
 test('No logicalRecipients: classic per-person expansion unchanged', function () {

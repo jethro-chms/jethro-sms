@@ -7,8 +7,10 @@ namespace Sms;
 /**
  * S-expression template engine for SMS message token expansion.
  *
- * Expands %word% and %(fn arg)% tokens using registered functions and
- * a caller-supplied variable resolver.
+ * Expands %name% and %(fn arg)% tokens using registered functions and
+ * a caller-supplied variable resolver. A variable name is letters, digits,
+ * '_' and '.', so hosts can namespace variables (e.g. %selected.firstname%);
+ * the dot has no meaning to the engine.
  *
  * @see TemplateException
  * @see TokenExpandingSmsProvider
@@ -55,13 +57,13 @@ final class Templater
     /**
      * Whether the template contains any %...% tokens (including s-expressions).
      *
-     * A bare '%' like "20% off" returns false — only %word% or %(...)% patterns
-     * count as tokens.
+     * A bare '%' like "20% off" returns false — only %name% (letters, digits,
+     * '_' and '.') or %(...)% patterns count as tokens.
      */
     public function hasTokens(string $template): bool
     {
         return str_contains($template, '%')
-            && (str_contains($template, '%(') || preg_match('/%\w+%/', $template));
+            && (str_contains($template, '%(') || preg_match('/%\w[\w.]*%/', $template));
     }
 
     /**
@@ -76,8 +78,8 @@ final class Templater
         // A complete s-expression (%( … )%), a token-shaped but unclosed one
         // (%(name … with no ')'), or a legacy %word%.
         return (bool) preg_match('/%\([^%()]*\)%/', $template)
-            || (bool) preg_match('/%\([A-Za-z_][\w-]*%/', $template)
-            || (bool) preg_match('/%[A-Za-z_][\w-]*%/', $template);
+            || (bool) preg_match('/%\([A-Za-z_][\w.-]*%/', $template)
+            || (bool) preg_match('/%[A-Za-z_][\w.-]*%/', $template);
     }
 
     /**
@@ -220,9 +222,9 @@ final class Templater
                 $result .= $this->evalExpr($tokens, $pos, $resolveVar);
 
             } else {
-                // %word%  —  legacy variable token
+                // %name%  —  legacy variable token (letters, digits, '_', '.')
                 $wordStart = $i;
-                while ($i < $len && (ctype_alnum($template[$i]) || $template[$i] === '_')) {
+                while ($i < $len && (ctype_alnum($template[$i]) || $template[$i] === '_' || $template[$i] === '.')) {
                     $i++;
                 }
 

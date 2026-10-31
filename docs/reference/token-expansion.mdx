@@ -4,13 +4,16 @@ sidebar_position: 7
 
 # SMS Token Expansion
 
-When a message contains `%…%` tokens, `TokenExpandingSmsProvider` intercepts the send and expands them per recipient. When the entry carries `logicalRecipients` (recipients sharing a mobile, clustered by `DeduplicatingSmsProvider`), it expands **per group** instead: each member's token values are joined with " & " ("Hi Alice & Bob, …"), so the one message sent to the shared handset reads naturally.
+When a message contains `%…%` tokens, `TokenExpandingSmsProvider` intercepts the send and expands them per recipient. When the entry carries `logicalRecipients` (recipients sharing a mobile, clustered by `DeduplicatingSmsProvider`), it expands **per group** instead: each member's token values are joined with " & " ("Hi Alice & Bob, …"), so the one message sent to the shared handset reads naturally. A value two members share appears once: two parents sharing a mobile, sent a message about the same child, get "Ann", not "Ann & Ann".
+
+Variable names are letters, digits, `_` and `.`. The dot means nothing to the engine; hosts use it to namespace variables, e.g. `%selected.firstname%`.
 
 ## Available Tokens
 
-`getAvailableTokens()` in `include/jethro_sms.php` defines the token set:
-`%firstname%`, `%lastname%`, `%fullname%` — resolved from
-`_person.first_name` / `last_name`.
+`getAvailableTokens()` in `include/jethro_sms.php` (Jethro) defines the token set:
+
+- `%firstname%`, `%lastname%`, `%fullname%`: the recipient, from `_person.first_name` / `last_name`.
+- `%selected.firstname%`, `%selected.lastname%`, `%selected.fullname%`: the selected person(s) the recipient is sent the message for (`JethroSmsRecipient::$selectedPersonIds`). With "the adults in the selected persons' families", a parent of two selected children gets "Ann & Ben". When the recipient was selected directly, these are the recipient's own names.
 
 ## How It Works
 
@@ -25,7 +28,7 @@ If `%` is detected:
 1. Each recipient is individually sent through the inner provider
 2. The token resolver closure is called for each recipient
 3. Person data is fetched from the database (cached per request via closure)
-4. Tokens are replaced with actual values via `preg_replace_callback('/%\w+%/', ...)`
+4. Tokens are replaced with actual values by `Templater::expand()` (`%name%` and `%(…)%` forms)
 5. Each personalised message is sent individually to the gateway
 6. Each `SmsDelivery` object carries the expanded message body
 
@@ -54,6 +57,6 @@ Non-`JethroSmsRecipient` recipients (bare phone numbers from the CLI, where `$lo
 ## UI Hint
 
 The UI shows a hint below the textarea:
-> Personalise with: `%firstname%`, `%lastname%`, `%fullname%`
+> Personalise with: `%firstname%`, `%lastname%`, `%fullname%`, `%selected.firstname%`, `%selected.lastname%`, `%selected.fullname%`
 
 Rendered by `printTextbox()` using `getAvailableTokens()`.

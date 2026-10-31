@@ -17,6 +17,12 @@ namespace Sms;
  * resolver (callable(SmsRecipient): array<string, string>) maps variable
  * names to values for each recipient.
  *
+ * When recipients share a number (DeduplicatingSmsProvider groups), each
+ * variable's values across the group are joined " & " ("Hi Alice & Bob"),
+ * with repeated values dropped: two members whose value is the same (e.g.
+ * two parents sent a message about the same child) give "Alice", not
+ * "Alice & Alice".
+ *
  * Without known variables, sends as a single batch (no overhead). A bare
  * '%' such as "20% off" does not trigger per-recipient splitting.
  * @see DecoratingSmsProvider
@@ -85,7 +91,7 @@ class TokenExpandingSmsProvider extends DecoratingSmsProvider
                         $tokens = ($this->tokenResolver)($member);
                         foreach ($this->varNames as $name) {
                             $value = $tokens[$name] ?? null;
-                            if ($value !== null && $value !== '') {
+                            if ($value !== null && $value !== '' && !in_array($value, $combined[$name] ?? [], true)) {
                                 $combined[$name][] = $value;
                             }
                         }

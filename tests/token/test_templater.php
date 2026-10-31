@@ -153,6 +153,25 @@ test('expand: unknown %word% → literal preserved', function () {
     assert_eq($r->getValue(), '%discount% applies', 'Unknown word token preserved literally');
 });
 
+test('expand: dotted %name% is one variable name', function () {
+    $t = new Templater();
+    $r = $t->expand('Hi %selected.firstname%, from %(selected.firstname)%', fn(string $n): ?string => match($n) {
+        'selected.firstname' => 'Ann',
+        default => null,
+    });
+    assert_eq($r->getValue(), 'Hi Ann, from Ann');
+});
+
+test('detection: dotted %name% is a token; dots in prose are not', function () {
+    $t = new Templater();
+    assert_true($t->hasTokens('Hi %selected.firstname%'));
+    assert_true($t->hasRecognisableToken('Hi %selected.firstname%'));
+    assert_true($t->referencesVariables('Hi %selected.firstname%', ['selected.firstname']));
+    assert_false($t->referencesVariables('Hi %selectedXfirstname%', ['selected.firstname']), 'the dot is literal, not a wildcard');
+    assert_false($t->hasTokens('Up 5%. Then 10%.'));
+    assert_eq($t->expand('Up 5%. Then 10%.', fn(string $n): ?string => null)->getValue(), 'Up 5%. Then 10%.');
+});
+
 test('expand: multiple %word% tokens', function () {
     $t = new Templater();
     $resolve = fn(string $n): ?string => match($n) {
