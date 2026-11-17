@@ -46,6 +46,12 @@ test('cost line phrasing: "1 segment -> 4 recipients = $0.20." (no leading char 
     assert_false($res['blocked']);
 });
 
+test('nobody selected yet (explicit count 0): cost line still shows "→ 0 recipients = $0.00."', function () {
+    $cfg = new SmsStatuslineConfig(segmentCost: 0.04);
+    assert_contains(renderStatusline(str_repeat('a', 200), [], $cfg, 0)['html'], '2 segments → 0 recipients = $0.00.');
+    assert_contains(renderStatusline('Hello', [], $cfg, 0)['html'], '1 segment → 0 recipients = $0.00.');
+});
+
 test('opted-out rows are not counted or charged; all opted out -> no cost line', function () {
     $cfg = new SmsStatuslineConfig(segmentCost: 0.05);
     $msg = str_repeat('a', 29);

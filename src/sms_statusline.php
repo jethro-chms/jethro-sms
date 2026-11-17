@@ -288,12 +288,14 @@ function addHelpText(string $anchor, SmsStatuslineConfig $cfg, string $text): st
  * Build the cost counter line (pure, no side effects). Port of
  * JethroSMS.buildCostLine.
  *
- * Returns '' when any required parameter is zero/empty — callers handle
- * the "N chars remaining" or "N chars = X segments" cases inline.
+ * Returns '' when there are no segments or no segment cost — callers handle
+ * the "N chars remaining" or "N chars = X segments" cases inline. Zero
+ * recipients gives "N segments → 0 recipients = $0.00.", so a composer with
+ * nobody selected still says what it is counting.
  */
 function buildCostLine(int $segs, string $segmentType, int $recipientCount, float $segmentCost): string
 {
-    if ($segs <= 0 || $segmentCost <= 0 || $recipientCount <= 0) {
+    if ($segs <= 0 || $segmentCost <= 0 || $recipientCount < 0) {
         return '';
     }
     $cost = $segs * $recipientCount * $segmentCost;
@@ -474,7 +476,10 @@ function renderStatusline(string $message, array $deliveries, SmsStatuslineConfi
 
     if ($balanceBlocked) {
         $parts[] = '<p>' . escapeHtml($balanceMsg) . '</p>';
-    } elseif ($segs > 0 && $recipientCount > 0) {
+    } elseif ($segs > 0 && ($recipientCount > 0 || ($deliveries === [] && $explicitRecipientCount === 0))) {
+        // An explicit count of 0 (nobody selected yet) still gets the cost
+        // line, "→ 0 recipients = $0.00.", so the composer shows what it is
+        // counting. Preview rows that are all opted out still get none.
         if (!$uniform && $totalSegments !== null) {
             // Rows differ (e.g. %firstname% expanded to a unicode name in one
             // row), so a single "N segments" figure would be wrong. Show the
